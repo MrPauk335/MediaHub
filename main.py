@@ -11,9 +11,22 @@ import re
 import random
 import math
 import shutil
+import sys
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+# --- УТИЛИТЫ ---
+def resource_path(relative_path):
+    """ Получает путь к ресурсам (ffmpeg), работает и в IDE, и в EXE """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def clean_ansi(text):
+    return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(text))
 
 # --- КОНСТАНТЫ ---
 TAG_COLORS = {"Музыка": "#e74c3c", "Видео": "#3498db", "Юмор": "#2ecc71", "Фильмы": "#f1c40f", "Гейминг": "#9b59b6", "TikTok": "#ff0050"}
@@ -21,9 +34,6 @@ TAG_FOLDERS = {"Музыка": "Музыка", "Видео": "Видео", "Юм
 YT_MAP = {"Music": "Музыка", "Comedy": "Юмор", "Entertainment": "Юмор", "Film & Animation": "Фильмы", "Gaming": "Гейминг"}
 PARTICLE_COLORS = ["#FF0000", "#FFD700", "#FFFFFF", "#FF69B4", "#00FFFF"]
 REACTION_ICONS = {"Музыка": "🎵", "Юмор": "😆", "Гейминг": "🎮", "Фильмы": "🎬", "Видео": "👍", "TikTok": "📱"}
-
-def clean_ansi(text):
-    return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(text))
 
 class YouTubeSlider(Canvas):
     def __init__(self, master, command=None, **kwargs):
@@ -73,21 +83,27 @@ class YouTubeSlider(Canvas):
 class MediaHub(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("MediaHub")
-        self.geometry("1400x950")
+        self.title("MediaHub v2.0 (No LAN)")
+        self.geometry("1200x800")
 
         # Настройки
         self.config_file = "mediahub_config.json"
         self.config_data = {
-            "save_path": os.getcwd(), # По умолчанию папка программы
+            "save_path": os.getcwd(),
             "res": "1080p", "concurrent_frags": "10", "sponsor_block": True, 
             "liked_files": [], "metadata_cache": {}, "proxy": ""
         }
         self.load_settings()
         self.ensure_folders()
 
-        self.vlc_instance = vlc.Instance("--no-xlib --quiet")
-        self.vlc_player = self.vlc_instance.media_player_new()
+        # Инициализация VLC
+        try:
+            self.vlc_instance = vlc.Instance("--no-xlib --quiet")
+            self.vlc_player = self.vlc_instance.media_player_new()
+        except Exception as e:
+            messagebox.showerror("Ошибка VLC", f"Не удалось загрузить VLC плеер.\nУбедитесь, что VLC установлен (x64).\n\n{e}")
+            self.destroy()
+            return
         
         self.current_view = "all"
         self.current_file_path = None
@@ -104,13 +120,13 @@ class MediaHub(ctk.CTk):
         self.bind_all("<Up>", self.hk_vol_up)
         self.bind_all("<Down>", self.hk_vol_down)
         
-        # Универсальный Ctrl+V
         def handle_ctrl_v(event):
             if event.keycode == 86:
                 self.paste_url()
                 return "break"
         self.bind_all("<Control-KeyPress>", handle_ctrl_v)
 
+    # --- ХЕЛПЕРЫ ---
     def is_typing(self):
         focus = self.focus_get()
         return isinstance(focus, ctk.CTkEntry)
@@ -158,51 +174,49 @@ class MediaHub(ctk.CTk):
         with open(self.config_file, "w", encoding='utf-8') as f:
             json.dump(self.config_data, f, ensure_ascii=False, indent=4)
 
+    # --- GUI ---
     def create_widgets(self):
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(padx=10, pady=10, fill="both", expand=True)
 
-        self.tab_dl = self.tabview.add("📥 Загрузка и Поиск")
+        self.tab_dl = self.tabview.add("📥 Загрузка")
         self.tab_player = self.tabview.add("🎵 Плеер")
         self.tab_set = self.tabview.add("⚙️ Настройки")
 
-        # --- ЗАГРУЗКА ---
-        ctk.CTkLabel(self.tab_dl, text="MediaHub", font=("Arial", 28, "bold")).pack(pady=10)
+        # === ЗАГРУЗКА ===
+        ctk.CTkLabel(self.tab_dl, text="MediaHub Downloader", font=("Arial", 28, "bold")).pack(pady=10)
         search_f = ctk.CTkFrame(self.tab_dl, fg_color="transparent")
         search_f.pack(pady=5)
-        self.url_entry = ctk.CTkEntry(search_f, placeholder_text="Поиск или ссылка YouTube...", width=600, height=50)
+        self.url_entry = ctk.CTkEntry(search_f, placeholder_text="Вставьте ссылку YouTube/TikTok...", width=600, height=50)
         self.url_entry.pack(side="left", padx=5)
-        self.dl_main_btn = ctk.CTkButton(search_f, text="НАЙТИ / СКАЧАТЬ", width=150, height=50, fg_color="#27ae60", command=self.analyze_link)
+        self.dl_main_btn = ctk.CTkButton(search_f, text="СКАЧАТЬ", width=150, height=50, fg_color="#27ae60", command=self.analyze_link)
         self.dl_main_btn.pack(side="left")
 
-        self.search_results_frame = ctk.CTkScrollableFrame(self.tab_dl, width=850, height=300, label_text="Результаты")
+        self.search_results_frame = ctk.CTkScrollableFrame(self.tab_dl, width=850, height=300, label_text="Результаты поиска")
         self.search_results_frame.pack(pady=10, padx=20)
 
-        self.dl_mode = ctk.CTkSegmentedButton(self.tab_dl, values=["Видео", "Аудио (MP3)"])
-        self.dl_mode.set("Видео")
-        self.dl_mode.pack(pady=5)
         self.dl_progress = ctk.CTkProgressBar(self.tab_dl, width=800)
         self.dl_progress.set(0)
         self.dl_progress.pack(pady=10)
-        self.dl_status = ctk.CTkLabel(self.tab_dl, text="Готов", font=("Arial", 14, "bold"), text_color="#1abc9c")
+        self.dl_status = ctk.CTkLabel(self.tab_dl, text="Готов к работе", font=("Arial", 14, "bold"), text_color="#1abc9c")
         self.dl_status.pack()
 
         # === ПЛЕЕР ===
         p_main = ctk.CTkFrame(self.tab_player, fg_color="transparent")
         p_main.pack(fill="both", expand=True)
         
-        left_side = ctk.CTkFrame(p_main, width=480)
+        left_side = ctk.CTkFrame(p_main, width=400)
         left_side.pack(side="left", fill="y", padx=5, pady=5)
         
         filter_f = ctk.CTkFrame(left_side, fg_color="transparent")
         filter_f.pack(fill="x", padx=5, pady=5)
-        ctk.CTkButton(filter_f, text="Все", width=70, command=lambda: self.switch_view("all")).grid(row=0, column=0, padx=2)
-        ctk.CTkButton(filter_f, text="Музыка", width=80, command=lambda: self.switch_view("Музыка")).grid(row=0, column=1, padx=2)
-        ctk.CTkButton(filter_f, text="Юмор", width=70, command=lambda: self.switch_view("Юмор")).grid(row=0, column=2, padx=2)
-        ctk.CTkButton(filter_f, text="TikTok", width=70, command=lambda: self.switch_view("TikTok")).grid(row=0, column=3, padx=2)
-        ctk.CTkButton(filter_f, text="❤", width=50, fg_color="#c0392b", command=lambda: self.switch_view("liked")).grid(row=0, column=4, padx=2)
+        ctk.CTkButton(filter_f, text="Все", width=60, command=lambda: self.switch_view("all")).grid(row=0, column=0, padx=2)
+        ctk.CTkButton(filter_f, text="Музыка", width=60, command=lambda: self.switch_view("Музыка")).grid(row=0, column=1, padx=2)
+        ctk.CTkButton(filter_f, text="Юмор", width=60, command=lambda: self.switch_view("Юмор")).grid(row=0, column=2, padx=2)
+        ctk.CTkButton(filter_f, text="TikTok", width=60, command=lambda: self.switch_view("TikTok")).grid(row=0, column=3, padx=2)
+        ctk.CTkButton(filter_f, text="❤", width=40, fg_color="#c0392b", command=lambda: self.switch_view("liked")).grid(row=0, column=4, padx=2)
 
-        self.lib_scroll = ctk.CTkScrollableFrame(left_side, label_text="Библиотека (ПКМ для управления)")
+        self.lib_scroll = ctk.CTkScrollableFrame(left_side, label_text="Библиотека")
         self.lib_scroll.pack(fill="both", expand=True, padx=5, pady=5)
 
         right_side = ctk.CTkFrame(p_main, fg_color="black")
@@ -217,7 +231,7 @@ class MediaHub(ctk.CTk):
         
         info_f = ctk.CTkFrame(ctrls, fg_color="transparent")
         info_f.pack(fill="x", padx=15)
-        self.track_name = ctk.CTkLabel(info_f, text="Файл не выбран", font=("Arial", 12, "bold"), text_color="white", wraplength=500, justify="left")
+        self.track_name = ctk.CTkLabel(info_f, text="...", font=("Arial", 12, "bold"), text_color="white", wraplength=500, justify="left")
         self.track_name.pack(side="left")
         self.time_lbl = ctk.CTkLabel(info_f, text="00:00 / 00:00", font=("Consolas", 14))
         self.time_lbl.pack(side="right")
@@ -236,7 +250,7 @@ class MediaHub(ctk.CTk):
         self.vol_slider.set(70)
         self.vol_slider.grid(row=0, column=2, padx=20)
 
-        # --- НАСТРОЙКИ ---
+        # === НАСТРОЙКИ ===
         self.build_settings()
 
     def build_settings(self):
@@ -255,26 +269,25 @@ class MediaHub(ctk.CTk):
         self.opt_res.set(self.config_data["res"])
         self.opt_res.pack(fill="x", pady=5)
 
-        self.cb_sb = ctk.CTkCheckBox(s, text="Использовать SponsorBlock", command=lambda: self.update_cfg("sponsor_block", self.cb_sb.get()))
+        self.cb_sb = ctk.CTkCheckBox(s, text="SponsorBlock (пропуск рекламы)", command=lambda: self.update_cfg("sponsor_block", self.cb_sb.get()))
         if self.config_data["sponsor_block"]:
             self.cb_sb.select()
         self.cb_sb.pack(anchor="w", pady=10)
 
-        ctk.CTkLabel(s, text="📦 Offline Mirror (Sneakernet):").pack(anchor="w", pady=(10,0))
-        ctk.CTkButton(s, text="ЭКСПОРТИРОВАТЬ ДЛЯ ДРУГА (USB)", fg_color="#34495e", height=40, command=self.export_library).pack(fill="x", pady=5)
+        ctk.CTkButton(s, text="Экспорт библиотеки (на флешку)", fg_color="#34495e", height=40, command=self.export_library).pack(fill="x", pady=20)
 
     def update_cfg(self, k, v):
         self.config_data[k] = v
         self.save_settings()
 
-    # --- МЕНЕДЖМЕНТ ---
+    # --- ЛОГИКА ---
     def show_context_menu(self, event, full_p, filename, current_cat):
         m = Menu(self, tearoff=0, bg="#2b2b2b", fg="white", font=("Arial", 10))
         sub = Menu(m, tearoff=0, bg="#2b2b2b", fg="white")
         for cat in TAG_FOLDERS.keys():
             if cat != current_cat:
                 sub.add_command(label=f"В {cat}", command=lambda c=cat: self.move_file(full_p, filename, c))
-        m.add_cascade(label="📦 Перенести в класс...", menu=sub)
+        m.add_cascade(label="📦 Перенести...", menu=sub)
         m.add_separator()
         m.add_command(label="❌ Удалить файл", command=lambda: self.delete_file(full_p))
         m.post(event.x_root, event.y_root)
@@ -292,15 +305,17 @@ class MediaHub(ctk.CTk):
             pass
 
     def delete_file(self, path):
-        if messagebox.askyesno("Удаление", "Удалить навсегда?"):
-            os.remove(path)
-            self.refresh_playlist()
+        if messagebox.askyesno("Удаление", "Удалить файл навсегда?"):
+            try:
+                os.remove(path)
+                self.refresh_playlist()
+            except Exception as e:
+                messagebox.showerror("Ошибка", str(e))
 
     def get_final_cat(self, title, info):
         yt_cat = info.get('categories', [''])[0]
         cat = YT_MAP.get(yt_cat, "Видео")
         title_l = title.lower()
-        # Железный приоритет Музыки
         if any(x in title_l for x in ["дайте танк", "рекурсия", "песня", "shadowraze", "music"]):
             cat = "Музыка"
         if any(x in title_l for x in ["братишкин", "стинт", "нарезка", "смешно"]):
@@ -319,8 +334,12 @@ class MediaHub(ctk.CTk):
             if not os.path.exists(f_path):
                 continue
             
-            files = [f for f in os.listdir(f_path) if f.lower().endswith(('.mp4', '.mp3', '.mkv', '.webm'))]
-            if files:
+            try:
+                files = [f for f in os.listdir(f_path) if f.lower().endswith(('.mp4', '.mp3', '.mkv', '.webm'))]
+            except:
+                continue
+
+            if files and (self.current_view == "all" or self.current_view == cat_tag):
                 ctk.CTkLabel(self.lib_scroll, text=f"📂 {cat_tag.upper()}", font=("Arial", 11, "bold"), text_color="gray").pack(fill="x", pady=(10, 2), padx=5)
             
             for f in files:
@@ -337,21 +356,17 @@ class MediaHub(ctk.CTk):
                 clean_name = re.sub(r'\s\[.{11}\]', '', f)
                 
                 btn = ctk.CTkLabel(item_f, text=clean_name, anchor="w", text_color="white", 
-                                   font=("Arial", 11), wraplength=380, justify="left", cursor="hand2")
+                                   font=("Arial", 11), wraplength=350, justify="left", cursor="hand2")
                 btn.pack(side="left", fill="x", expand=True, padx=5, pady=2)
                 
                 for widget in [item_f, btn]:
                     widget.bind("<Button-1>", lambda e, p=full_p, n=f, c=cat_tag: self.play_media(p, n, c))
                     widget.bind("<Button-3>", lambda e, p=full_p, n=f, c=cat_tag: self.show_context_menu(e, p, n, c))
                 
-                def on_enter(e, wid=item_f):
-                    wid.configure(fg_color="#333333")
-                def on_leave(e, wid=item_f):
-                    wid.configure(fg_color="transparent")
-                item_f.bind("<Enter>", on_enter)
-                item_f.bind("<Leave>", on_leave)
-                btn.bind("<Enter>", on_enter)
-                btn.bind("<Leave>", on_leave)
+                def on_enter(e, wid=item_f): wid.configure(fg_color="#333333")
+                def on_leave(e, wid=item_f): wid.configure(fg_color="transparent")
+                item_f.bind("<Enter>", on_enter); item_f.bind("<Leave>", on_leave)
+                btn.bind("<Enter>", on_enter); btn.bind("<Leave>", on_leave)
 
     def play_media(self, full_path, filename, cat="Видео"):
         self.current_file_path = full_path
@@ -370,52 +385,100 @@ class MediaHub(ctk.CTk):
         self.update_like_style(filename in self.config_data["liked_files"])
         
         vid_id = filename.split("[")[-1].split("]")[0] if "[" in filename else None
-        if vid_id:
+        if vid_id and self.config_data["sponsor_block"]:
             threading.Thread(target=self.load_sb, args=(vid_id,), daemon=True).start()
         else:
             self.seek_bar.update_segments([], 0)
 
-    # --- ЗАГРУЗКА ---
+    # --- СКАЧИВАНИЕ (ИСПРАВЛЕНО) ---
     def analyze_link(self):
         val = self.url_entry.get()
-        if not val:
-            return
-        self.dl_status.configure(text="Обработка...", text_color="yellow")
+        if not val: return
+        self.dl_status.configure(text="Анализ ссылки...", text_color="yellow")
         if any(x in val.lower() for x in ["youtube.com", "youtu.be", "tiktok.com"]):
             threading.Thread(target=self.proc_analyze, args=(val,), daemon=True).start()
         else:
             threading.Thread(target=self.search_youtube, args=(val,), daemon=True).start()
 
     def download_engine(self, urls):
+        # 1. Проверка наличия FFmpeg (частая причина ошибок)
+        bin_path = resource_path("./")
+        ffmpeg_exe = os.path.join(bin_path, "ffmpeg.exe")
+        
+        if not os.path.exists(ffmpeg_exe) and not shutil.which("ffmpeg"):
+            self.after(0, lambda: messagebox.showerror("Ошибка", "Файл ffmpeg.exe не найден!\nСкачивание видео высокого качества невозможно.\nПоложите ffmpeg.exe в папку с программой."))
+            self.after(0, lambda: self.dl_status.configure(text="Ошибка: Нет FFmpeg", text_color="red"))
+            self.after(0, lambda: self.dl_main_btn.configure(state="normal"))
+            return
+
+        error_log = []
         for url in urls:
             try:
-                self.dl_status.configure(text="Анализ...", text_color="yellow")
-                # Используем вспомогательную функцию для поиска ffmpeg внутри EXE или рядом
-                bin_path = resource_path("./")
-                with yt_dlp.YoutubeDL({'quiet': True, 'ffmpeg_location': bin_path, 'javascript_runtimes': ['node']}) as ydl:
+                self.dl_status.configure(text="Получение метаданных...", text_color="yellow")
+                
+                # Настройки yt-dlp для максимальной совместимости
+                common_opts = {
+                    'quiet': True, 
+                    'ffmpeg_location': bin_path,
+                    'nocheckcertificate': True, # Игнорировать ошибки SSL
+                    'ignoreerrors': False,      # Чтобы видеть конкретную ошибку в логе
+                    'no_warnings': False,
+                    'geo_bypass': True,
+                    'javascript_runtimes': ['node'],
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'restrictfilenames': True,  # Безопасные имена для Windows
+                    'windowsfilenames': True,
+                }
+
+                with yt_dlp.YoutubeDL(common_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
-                    cat = self.get_final_cat(info['title'], info)
+                    if not info:
+                        raise Exception("Не удалось получить информацию о видео.")
+                    
+                    cat = self.get_final_cat(info.get('title', 'Unknown'), info)
                     save_dir = os.path.join(self.config_data["save_path"], TAG_FOLDERS[cat])
                     img_dir = os.path.join(self.config_data["save_path"], "img")
-                    self.config_data["metadata_cache"][f"{info['title']} [{info['id']}].mp4"] = {"category": cat}
+                    
+                    filename_clean = f"{info['title']} [{info['id']}].mp4"
+                    self.config_data["metadata_cache"][filename_clean] = {"category": cat}
                     self.save_settings()
 
-                opts = {
+                # Настройки скачивания
+                dl_opts = common_opts.copy()
+                dl_opts.update({
                     'outtmpl': f'{save_dir}/%(title)s [%(id)s].%(ext)s',
-                    'writethumbnail': True, 'thumbnail_output': f'{img_dir}/%(title)s.%(ext)s',
-                    'progress_hooks': [self.dl_hook], 'ffmpeg_location': bin_path,
-                    'writesubtitles': True, 'embedsubtitles': True, 'subtitleslangs': ['ru', 'en'],
-                    'javascript_runtimes': ['node'],
-                    'postprocessors': [{'key': 'FFmpegEmbedSubtitle'}, {'key': 'FFmpegMetadata'}, {'key': 'EmbedThumbnail'}]
-                }
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.download([url])
-                self.after(0, lambda: [self.dl_status.configure(text="Скачано!", text_color="#27ae60"), self.refresh_playlist()])
-            except:
-                self.after(0, lambda: self.dl_status.configure(text="Ошибка!", text_color="red"))
-        self.after(0, lambda: self.dl_main_btn.configure(state="normal"))
+                    'writethumbnail': True, 
+                    'thumbnail_output': f'{img_dir}/%(title)s.%(ext)s',
+                    'progress_hooks': [self.dl_hook],
+                    # Скачиваем лучшее видео и лучший звук, затем мержим
+                    'format': f'bestvideo[height<={self.config_data["res"].replace("p","")}]+bestaudio/best[height<={self.config_data["res"].replace("p","")}]/best',
+                    'merge_output_format': 'mp4',
+                    'writesubtitles': True, 
+                    'subtitleslangs': ['ru', 'en'],
+                    'postprocessors': [
+                        {'key': 'FFmpegEmbedSubtitle'}, 
+                        {'key': 'FFmpegMetadata'}, 
+                        {'key': 'EmbedThumbnail'},
+                        {'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}
+                    ]
+                })
 
-    # --- ЛАЙКИ ---
+                self.dl_status.configure(text="Скачивание...", text_color="#3498db")
+                with yt_dlp.YoutubeDL(dl_opts) as ydl:
+                    ydl.download([url])
+                
+            except Exception as e:
+                error_log.append(f"{url}: {str(e)}")
+
+        self.after(0, lambda: self.dl_main_btn.configure(state="normal"))
+        
+        if error_log:
+            err_msg = "\n".join(error_log)
+            self.after(0, lambda: self.dl_status.configure(text="Ошибка!", text_color="red"))
+            self.after(0, lambda: messagebox.showerror("Ошибка скачивания", f"Детали ошибок:\n{err_msg}"))
+        else:
+            self.after(0, lambda: [self.dl_status.configure(text="Готово!", text_color="#27ae60"), self.refresh_playlist()])
+
     def update_like_style(self, liked):
         if liked:
             self.like_btn.configure(fg_color="#FF0000", hover_color="#922b21")
@@ -423,8 +486,7 @@ class MediaHub(ctk.CTk):
             self.like_btn.configure(fg_color="#333", hover_color="#444")
 
     def toggle_like(self):
-        if not self.current_file_path:
-            return
+        if not self.current_file_path: return
         fname = os.path.basename(self.current_file_path)
         if fname in self.config_data["liked_files"]:
             self.config_data["liked_files"].remove(fname)
@@ -441,7 +503,6 @@ class MediaHub(ctk.CTk):
         spark_win.overrideredirect(True)
         spark_win.attributes("-topmost", True, "-transparentcolor", "black")
         
-        # Увеличили окно до 600x600, чтобы не было "краёв", и центрируем точнее
         W, H = 600, 600
         bx, by = self.like_btn.winfo_rootx(), self.like_btn.winfo_rooty()
         bw, bh = self.like_btn.winfo_width(), self.like_btn.winfo_height()
@@ -450,7 +511,6 @@ class MediaHub(ctk.CTk):
         canvas = Canvas(spark_win, width=W, height=H, bg="black", highlightthickness=0)
         canvas.pack()
         
-        # Частицы теперь разлетаются в центре 600x600 окна
         particles = [{"x": W//2, "y": H//2, "vx": math.cos(a)*random.uniform(5,15), "vy": math.sin(a)*random.uniform(5,15), 
                       "gravity": 0.25, "radius": random.randint(8,20), "color": random.choice(colors)} 
                      for a in [random.uniform(0, 2*math.pi) for _ in range(45)]]
@@ -469,33 +529,55 @@ class MediaHub(ctk.CTk):
                 self.after(15, lambda: animate(f + 1))
             else:
                 spark_win.destroy()
-        
         animate()
 
-    # --- СИСТЕМНОЕ ---
     def search_youtube(self, q):
-        for w in self.search_results_frame.winfo_children():
-            w.destroy()
+        for w in self.search_results_frame.winfo_children(): w.destroy()
         try:
-            with yt_dlp.YoutubeDL({'extract_flat': True, 'quiet': True, 'javascript_runtimes': ['node']}) as ydl:
+            self.dl_status.configure(text="Поиск...", text_color="yellow")
+            opts = {
+                'extract_flat': True, 
+                'quiet': True,
+                'javascript_runtimes': ['node'],
+                'nocheckcertificate': True,
+                'restrictfilenames': True,
+                'windowsfilenames': True,
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(f"ytsearch10:{q}", download=False)
+                if not info or 'entries' not in info:
+                    raise Exception("Результаты поиска не найдены.")
                 for e in info['entries']:
                     btn = ctk.CTkButton(self.search_results_frame, text=f"📺 {e['title']}", anchor="w", fg_color="transparent", command=lambda u=e['url']: [self.url_entry.delete(0, 'end'), self.url_entry.insert(0, u), self.analyze_link()])
                     btn.pack(fill="x", pady=1)
             self.dl_status.configure(text="Выберите видео", text_color="#1abc9c")
-        except:
-            pass
+        except Exception as e:
+            self.after(0, lambda: self.dl_status.configure(text="Ошибка поиска", text_color="red"))
+            self.after(0, lambda: messagebox.showerror("Ошибка поиска", f"Не удалось выполнить поиск:\n{e}"))
 
     def proc_analyze(self, u):
         try:
-            with yt_dlp.YoutubeDL({'extract_flat': True, 'quiet': True, 'javascript_runtimes': ['node']}) as ydl:
+            bin_path = resource_path("./")
+            opts = {
+                'extract_flat': True, 
+                'quiet': True,
+                'ffmpeg_location': bin_path,
+                'javascript_runtimes': ['node'],
+                'nocheckcertificate': True,
+                'restrictfilenames': True,
+                'windowsfilenames': True,
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(u, download=False)
+                if not info:
+                    raise Exception("Не удалось получить информацию о ссылке.")
                 if 'entries' in info:
                     self.after(0, lambda: self.show_sel(info))
                 else:
                     self.start_dl([u])
-        except:
-            messagebox.showerror("Ошибка", "Анализ провален")
+        except Exception as e:
+            self.after(0, lambda: self.dl_status.configure(text="Ошибка анализа", text_color="red"))
+            self.after(0, lambda: messagebox.showerror("Ошибка", f"Не удалось прочитать ссылку:\n{e}"))
 
     def show_sel(self, info):
         win = Toplevel(self); win.title("Выбор"); win.geometry("650x750"); win.configure(bg="#1a1a1a"); win.attributes("-topmost", True)
@@ -537,10 +619,6 @@ class MediaHub(ctk.CTk):
         except:
             pass
 
-    def stop_media(self):
-        self.vlc_player.stop()
-        self.seek_bar.set_progress(0)
-
     def change_save_path(self):
         p = filedialog.askdirectory()
         if p:
@@ -551,35 +629,25 @@ class MediaHub(ctk.CTk):
             self.set_path_lbl.configure(text=p)
 
     def export_library(self):
-        dest = filedialog.askdirectory(title="Выберите папку для экспорта (флешку)")
+        dest = filedialog.askdirectory(title="Выберите папку для экспорта")
         if not dest: return
-        
         self.dl_status.configure(text="Экспорт...", text_color="yellow")
-        self.dl_main_btn.configure(state="disabled")
         
         def run_export():
             try:
                 base = self.config_data["save_path"]
-                folders = ["img", "Музыка", "Видео", "Юмор", "Фильмы", "Гейминг", "TikTok"]
-                for f in folders:
+                for f in TAG_FOLDERS.values():
                     src_f = os.path.join(base, f)
                     dest_f = os.path.join(dest, f)
                     if os.path.exists(src_f):
                         if not os.path.exists(dest_f): os.makedirs(dest_f)
                         for item in os.listdir(src_f):
                             shutil.copy2(os.path.join(src_f, item), os.path.join(dest_f, item))
-                
-                # Создаем переносной конфиг
-                portable_cfg = self.config_data.copy()
-                portable_cfg["save_path"] = "./" # Относительный путь для друга
-                with open(os.path.join(dest, "mediahub_config.json"), "w", encoding='utf-8') as f:
-                    json.dump(portable_cfg, f, ensure_ascii=False, indent=4)
-                
-                self.after(0, lambda: messagebox.showinfo("Готово", f"Библиотека экспортирована в:\n{dest}"))
+                self.after(0, lambda: messagebox.showinfo("Готово", f"Библиотека скопирована в:\n{dest}"))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Ошибка", f"Экспорт прерван: {e}"))
+                self.after(0, lambda: messagebox.showerror("Ошибка", str(e)))
             finally:
-                self.after(0, lambda: [self.dl_status.configure(text="Готов", text_color="#1abc9c"), self.dl_main_btn.configure(state="normal")])
+                self.after(0, lambda: self.dl_status.configure(text="Готов", text_color="#1abc9c"))
 
         threading.Thread(target=run_export, daemon=True).start()
 
