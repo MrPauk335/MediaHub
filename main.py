@@ -73,7 +73,7 @@ class YouTubeSlider(Canvas):
 class MediaHub(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("MediaHub PRO Ultra")
+        self.title("MediaHub")
         self.geometry("1400x950")
 
         # Настройки
@@ -167,7 +167,7 @@ class MediaHub(ctk.CTk):
         self.tab_set = self.tabview.add("⚙️ Настройки")
 
         # --- ЗАГРУЗКА ---
-        ctk.CTkLabel(self.tab_dl, text="MediaHub PRO Ultra", font=("Arial", 28, "bold")).pack(pady=10)
+        ctk.CTkLabel(self.tab_dl, text="MediaHub", font=("Arial", 28, "bold")).pack(pady=10)
         search_f = ctk.CTkFrame(self.tab_dl, fg_color="transparent")
         search_f.pack(pady=5)
         self.url_entry = ctk.CTkEntry(search_f, placeholder_text="Поиск или ссылка YouTube...", width=600, height=50)
