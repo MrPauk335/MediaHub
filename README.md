@@ -2,7 +2,7 @@
 
 **MediaHub** is a powerful all-in-one downloader and player designed for speed, portability, and "sneakernet" offline mirroring. Download your favorite content from YouTube and TikTok into a perfectly organized library.
 
-![MediaHub UI](https://via.placeholder.com/800x450.png?text=MediaHub+Interface+Preview)
+![MediaHub UI](preview.png)
 
 ## ✨ Key Features
 
