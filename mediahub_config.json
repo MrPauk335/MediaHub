@@ -1,0 +1,49 @@
+{
+    "save_path": "D:/Projects/py/downloader",
+    "res": "1080p",
+    "concurrent_frags": "10",
+    "sponsor_block": true,
+    "liked_files": [
+        "Дайте танк (!) - Спам [sTody_0Lo-0].mp4",
+        "Дайте танк (!) – Слова-паразиты (мюзикл) [WAOpVxr4ba8].mp4",
+        "Дайте танк (!) – Я [hGIo_yjhe_E].mkv",
+        "Дайте танк (!) – Рекурсия [8dcDyo7Fq6o].mp4",
+        "Дайте танк (!) – Друг [ECu9wgCSMEA].mkv",
+        "Дайте танк (!) – Оплачено [0GROgwhD_N4].mp4"
+    ],
+    "metadata_cache": {
+        "Дайте танк (!) - Спам [sTody_0Lo-0].mp4": {
+            "category": "Музыка",
+            "title": "Дайте танк (!) - Спам"
+        },
+        "Дайте танк (!) - Утро [T-hswDp-e2I].mp4": {
+            "category": "Музыка"
+        },
+        "Дайте танк (!) – Слова-паразиты (мюзикл) [WAOpVxr4ba8].mp4": {
+            "category": "Музыка"
+        },
+        "Дайте танк (!) – Друг [ECu9wgCSMEA].mp4": {
+            "category": "Музыка"
+        },
+        "Дайте танк (!) – Мы [fgiBmUy4UcM].mp4": {
+            "category": "Музыка"
+        },
+        "Дайте танк (!) – Я [hGIo_yjhe_E].mp4": {
+            "category": "Музыка"
+        },
+        "#TrendingReels #TrendingReels #Foryoupage ##FYP #FYP #ViralTikTok #Mi... [7599551306751069470].mp4": {
+            "category": "TikTok"
+        },
+        "Дайте танк (!) – Оплачено [0GROgwhD_N4].mp4": {
+            "category": "Музыка"
+        }
+    },
+    "proxy": "",
+    "codec": "h264",
+    "cookies": "",
+    "embed_subs": true,
+    "embed_thumbnail": true,
+    "keep_video": false,
+    "speed_limit": "0",
+    "theme": "Dark"
+}
